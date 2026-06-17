@@ -253,6 +253,26 @@ select {
 .btn-primary { background: var(--accent); border-color: var(--accent); color: #fff; }
 .btn-primary:hover { background: #3a7de0; border-color: #3a7de0; }
 
+/* ── Eyedropper ── */
+.btn-dropper {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--surface2);
+  color: var(--muted);
+  font-size: 0.875rem;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
+}
+.btn-dropper:hover { background: #333; border-color: #555; color: var(--text); }
+.btn-dropper.picking { border-color: var(--accent); color: var(--accent); }
+.btn-dropper[hidden] { display: none; }
+
 /* ── Ofuse ── */
 .btn-ofuse {
   display: inline-flex;
@@ -294,6 +314,18 @@ select {
 }
 .toast.visible { opacity: 1; transform: translateX(-50%) translateY(0); }
 
+/* ── Footer ── */
+footer {
+  margin-top: 32px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border);
+  font-size: 0.75rem;
+  color: #555;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
 /* ── Responsive ── */
 @media (max-width: 640px) {
   body { padding: 12px; }
@@ -322,6 +354,9 @@ select {
       <input type="color" id="colorPicker" value="#e05a3a">
     </label>
     <input type="text" class="hex-field" id="hexField" value="#e05a3a" maxlength="7" spellcheck="false" autocomplete="off">
+    <button class="btn-dropper" id="btnDropper" title="画面上の色をスポイト">
+      <i class="fa-solid fa-eye-dropper"></i>
+    </button>
   </div>
 
   <div class="sep"></div>
@@ -380,6 +415,10 @@ select {
 
 
 <div class="toast" id="toast"></div>
+
+<footer>
+  <i class="fa-brands fa-chrome"></i> Chrome / Edge 推奨 — スポイト機能（画面上の色を直接取得）が使えます
+</footer>
 
 <script>
 'use strict';
@@ -709,6 +748,30 @@ document.getElementById('btnASE').addEventListener('click', exportASE);
 document.getElementById('btnACO').addEventListener('click', exportACO);
 document.getElementById('btnHex').addEventListener('click', copyHexList);
 document.getElementById('btnCSS').addEventListener('click', copyCSSList);
+
+// ── Eyedropper ────────────────────────────────────────────────
+
+const btnDropper = document.getElementById('btnDropper');
+
+if (!window.EyeDropper) {
+  btnDropper.hidden = true;
+} else {
+  btnDropper.addEventListener('click', async () => {
+    const dropper = new EyeDropper();
+    btnDropper.classList.add('picking');
+    try {
+      const result = await dropper.open();
+      const hex = result.sRGBHex.toLowerCase();
+      field.value = hex;
+      picker.value = hex;
+      generate(hex);
+    } catch {
+      // キャンセル時は何もしない
+    } finally {
+      btnDropper.classList.remove('picking');
+    }
+  });
+}
 
 // ── Init ──────────────────────────────────────────────────────
 
