@@ -1,0 +1,718 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>違う色相で同じ明度の色を出すやつ</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+
+:root {
+  --bg: #111113;
+  --surface: #1c1c1f;
+  --surface2: #27272b;
+  --border: #35353a;
+  --text: #e8e8ec;
+  --muted: #8888a0;
+  --accent: #4f8ef7;
+  --gamut-color: #ff7043;
+  --r: 8px;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  min-height: 100vh;
+  padding: 20px;
+  max-width: 1440px;
+  margin: 0 auto;
+}
+
+header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 20px;
+}
+h1 { font-size: 1.25rem; font-weight: 700; letter-spacing: -0.02em; }
+.subtitle { font-size: 0.8125rem; color: var(--muted); margin-top: 3px; }
+
+/* ── Controls ── */
+.controls {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+  padding: 16px 20px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 20px;
+  margin-bottom: 20px;
+}
+
+.color-block { display: flex; align-items: center; gap: 12px; }
+
+.preview-label {
+  display: block;
+  width: 56px;
+  height: 56px;
+  border-radius: var(--r);
+  border: 2px solid var(--border);
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: border-color 0.15s;
+  position: relative;
+  overflow: hidden;
+}
+.preview-label:hover { border-color: #666; }
+
+#colorPicker {
+  position: absolute;
+  opacity: 0;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  cursor: pointer;
+  padding: 0;
+  border: none;
+}
+
+.hex-field {
+  font-family: monospace;
+  font-size: 0.9375rem;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  color: var(--text);
+  padding: 8px 12px;
+  border-radius: 6px;
+  width: 110px;
+  outline: none;
+  transition: border-color 0.15s;
+}
+.hex-field:focus { border-color: var(--accent); }
+
+.sep { width: 1px; background: var(--border); align-self: stretch; flex-shrink: 0; }
+
+.oklch-vals { display: flex; gap: 14px; align-items: center; }
+.oklch-val { text-align: center; min-width: 68px; }
+.val-label { font-size: 0.6875rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); margin-bottom: 2px; }
+.val-num { font-family: monospace; font-size: 0.875rem; font-weight: 600; }
+
+.options { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
+.opt-label { font-size: 0.8125rem; color: var(--muted); display: flex; align-items: center; gap: 7px; }
+
+select {
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  color: var(--text);
+  padding: 5px 8px;
+  border-radius: 5px;
+  font-size: 0.8125rem;
+  outline: none;
+  cursor: pointer;
+}
+
+/* ── Sections ── */
+.section { margin-bottom: 24px; }
+
+.section-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.6875rem;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--muted);
+  font-weight: 600;
+  margin-bottom: 10px;
+}
+
+.legend {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.6875rem;
+  color: var(--gamut-color);
+  margin-left: auto;
+  text-transform: none;
+  letter-spacing: 0;
+  font-weight: 400;
+}
+.legend-dot {
+  width: 7px; height: 7px;
+  border-radius: 50%;
+  background: var(--gamut-color);
+  flex-shrink: 0;
+}
+
+/* ── Palette Grid ── */
+.palette-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(112px, 1fr));
+  gap: 6px;
+}
+
+.swatch {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  overflow: hidden;
+  cursor: pointer;
+  transition: transform 0.1s, box-shadow 0.1s, border-color 0.1s;
+  user-select: none;
+}
+.swatch:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 18px rgba(0,0,0,0.5);
+  border-color: #555;
+}
+.swatch.copied {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 35%, transparent);
+}
+
+.sw-color { height: 72px; position: relative; }
+
+.hue-badge {
+  position: absolute;
+  top: 5px; left: 5px;
+  font-size: 0.625rem;
+  font-weight: 700;
+  font-family: monospace;
+  padding: 1px 4px;
+  border-radius: 3px;
+  background: rgba(0,0,0,0.4);
+  color: rgba(255,255,255,0.88);
+  line-height: 1.4;
+}
+
+.gamut-dot {
+  position: absolute;
+  top: 5px; right: 5px;
+  width: 7px; height: 7px;
+  border-radius: 50%;
+  background: var(--gamut-color);
+  box-shadow: 0 0 3px rgba(0,0,0,0.5);
+}
+
+.sw-info { padding: 7px 9px 8px; }
+
+.sw-hex {
+  font-family: monospace;
+  font-size: 0.8125rem;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  margin-bottom: 2px;
+}
+
+.sw-rgb {
+  font-family: monospace;
+  font-size: 0.6875rem;
+  color: var(--muted);
+  margin-bottom: 2px;
+}
+
+.sw-oklch {
+  font-family: monospace;
+  font-size: 0.625rem;
+  color: #666;
+}
+
+/* ── Grayscale Grid ── */
+.gray-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(112px, 1fr));
+  gap: 6px;
+}
+
+.gray-swatch {
+  height: 36px;
+  border-radius: 5px;
+  border: 1px solid var(--border);
+  filter: grayscale(100%);
+}
+
+/* ── Export ── */
+.export-row { display: flex; gap: 10px; flex-wrap: wrap; }
+
+.btn {
+  padding: 9px 18px;
+  border-radius: 7px;
+  border: 1px solid var(--border);
+  background: var(--surface2);
+  color: var(--text);
+  font-size: 0.8125rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+}
+.btn:hover { background: #333; border-color: #555; }
+.btn-primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+.btn-primary:hover { background: #3a7de0; border-color: #3a7de0; }
+
+/* ── Ofuse ── */
+.btn-ofuse {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 9px 18px;
+  border-radius: 7px;
+  border: 1px solid #5a4a3a;
+  background: #2e2318;
+  color: #c8a97a;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  text-decoration: none;
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
+}
+.btn-ofuse:hover {
+  background: #3d2f1e;
+  border-color: #8a6a40;
+  color: #e0c090;
+}
+
+/* ── Toast ── */
+.toast {
+  position: fixed;
+  bottom: 20px;
+  left: 50%;
+  transform: translateX(-50%) translateY(6px);
+  background: #2a2a38;
+  border: 1px solid #44445a;
+  color: #eee;
+  padding: 7px 16px;
+  border-radius: 20px;
+  font-size: 0.8125rem;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.18s, transform 0.18s;
+  z-index: 999;
+  white-space: nowrap;
+}
+.toast.visible { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+/* ── Responsive ── */
+@media (max-width: 640px) {
+  body { padding: 12px; }
+  .controls { padding: 12px; gap: 12px; }
+  .oklch-vals { gap: 8px; }
+  .palette-grid, .gray-grid { grid-template-columns: repeat(auto-fill, minmax(90px, 1fr)); }
+  .sw-color { height: 58px; }
+}
+</style>
+</head>
+<body>
+
+<header>
+  <div>
+    <h1>違う色相で同じ明度の色を出すやつ</h1>
+    <p class="subtitle">OKLCHのL値を固定し、色相（H）のみを変更して同じ知覚明度のカラーパレットを生成</p>
+  </div>
+  <a class="btn-ofuse" href="https://ofuse.me/multicaule" target="_blank" rel="noopener">
+    <i class="fa-solid fa-mug-hot"></i> ムルチコーレにコーヒーを奢る
+  </a>
+</header>
+
+<div class="controls">
+  <div class="color-block">
+    <label class="preview-label" id="previewLabel">
+      <input type="color" id="colorPicker" value="#e05a3a">
+    </label>
+    <input type="text" class="hex-field" id="hexField" value="#e05a3a" maxlength="7" spellcheck="false" autocomplete="off">
+  </div>
+
+  <div class="sep"></div>
+
+  <div class="oklch-vals">
+    <div class="oklch-val">
+      <div class="val-label">L（明度）</div>
+      <div class="val-num" id="valL">—</div>
+    </div>
+    <div class="oklch-val">
+      <div class="val-label">C（彩度）</div>
+      <div class="val-num" id="valC">—</div>
+    </div>
+    <div class="oklch-val">
+      <div class="val-label">H（色相）</div>
+      <div class="val-num" id="valH">—</div>
+    </div>
+  </div>
+
+  <div class="sep"></div>
+
+  <div class="options">
+    <label class="opt-label">
+      色相数
+      <select id="stepsSelect">
+        <option value="12">12色（30°刻み）</option>
+        <option value="24" selected>24色（15°刻み）</option>
+        <option value="36">36色（10°刻み）</option>
+      </select>
+    </label>
+  </div>
+</div>
+
+<div class="section">
+  <div class="section-head">
+    カラーパレット — クリック: カラーコードコピー
+    <span class="legend"><span class="legend-dot"></span>再現が難しい色なので彩度を自動調整しました</span>
+  </div>
+  <div class="palette-grid" id="paletteGrid"></div>
+</div>
+
+<div class="section">
+  <div class="section-head">グレースケール比較（同じL値なら同じ明るさに見える）</div>
+  <div class="gray-grid" id="grayGrid"></div>
+</div>
+
+<div class="section">
+  <div class="section-head">書き出し</div>
+  <div class="export-row">
+    <button class="btn btn-primary" id="btnASE">ASE 書き出し（Adobe / 汎用）</button>
+    <button class="btn" id="btnACO">ACO 書き出し（CLIP STUDIO / Photoshop）</button>
+    <button class="btn" id="btnHex">HEXリスト コピー</button>
+    <button class="btn" id="btnCSS">CSS oklch() コピー</button>
+  </div>
+</div>
+
+
+<div class="toast" id="toast"></div>
+
+<script>
+'use strict';
+
+// ── OKLCH ↔ sRGB Conversion ───────────────────────────────────
+
+/** sRGB 0-255 → linear */
+const lin = v => {
+  v = v / 255;
+  return v <= 0.04045 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4);
+};
+
+/** linear → sRGB 0-255, clamped */
+const delin = v => {
+  v = Math.max(0, Math.min(1, v));
+  return Math.round((v <= 0.0031308 ? v * 12.92 : 1.055 * Math.pow(v, 1 / 2.4) - 0.055) * 255);
+};
+
+function rgbToOklch(r, g, b) {
+  const lr = lin(r), lg = lin(g), lb = lin(b);
+
+  // linear sRGB → LMS
+  const l = 0.4122214708 * lr + 0.5363325363 * lg + 0.0514459929 * lb;
+  const m = 0.2119034982 * lr + 0.6806995451 * lg + 0.1073969566 * lb;
+  const s = 0.0883024619 * lr + 0.2817188376 * lg + 0.6299787005 * lb;
+
+  // LMS → OKLab
+  const l_ = Math.cbrt(l), m_ = Math.cbrt(m), s_ = Math.cbrt(s);
+  const L  = 0.2104542553 * l_ + 0.7936177850 * m_ - 0.0040720468 * s_;
+  const a  = 1.9779984951 * l_ - 2.4285922050 * m_ + 0.4505937099 * s_;
+  const bv = 0.0259040371 * l_ + 0.7827717662 * m_ - 0.8086757660 * s_;
+
+  return {
+    L,
+    C: Math.sqrt(a * a + bv * bv),
+    H: ((Math.atan2(bv, a) * 180 / Math.PI) + 360) % 360
+  };
+}
+
+function oklchToLinRGB(L, C, H) {
+  const h = H * Math.PI / 180;
+  const a = C * Math.cos(h), b = C * Math.sin(h);
+
+  // OKLab → LMS (cube-root space)
+  const l_ = L + 0.3963377774 * a + 0.2158037573 * b;
+  const m_ = L - 0.1055613458 * a - 0.0638541728 * b;
+  const s_ = L - 0.0894841775 * a - 1.2914855480 * b;
+
+  // LMS → linear sRGB
+  const l = l_ * l_ * l_, m = m_ * m_ * m_, s = s_ * s_ * s_;
+  return {
+    r:  4.0767416621 * l - 3.3077115913 * m + 0.2309699292 * s,
+    g: -1.2684380046 * l + 2.6097574011 * m - 0.3413193965 * s,
+    b: -0.0041960863 * l - 0.7034186147 * m + 1.7076147010 * s
+  };
+}
+
+const inGamut = (r, g, b) =>
+  r >= -1e-4 && r <= 1 + 1e-4 &&
+  g >= -1e-4 && g <= 1 + 1e-4 &&
+  b >= -1e-4 && b <= 1 + 1e-4;
+
+/** OKLCH → sRGB, with binary-search gamut mapping (keeps L+H, reduces C) */
+function oklchToRgb(L, C, H) {
+  let t = oklchToLinRGB(L, C, H);
+  let reduced = false, finalC = C;
+
+  if (!inGamut(t.r, t.g, t.b)) {
+    reduced = true;
+    let lo = 0, hi = C;
+    for (let i = 0; i < 24; i++) {
+      const mid = (lo + hi) / 2;
+      const test = oklchToLinRGB(L, mid, H);
+      if (inGamut(test.r, test.g, test.b)) { lo = mid; } else { hi = mid; }
+    }
+    finalC = lo;
+    t = oklchToLinRGB(L, lo, H);
+  }
+
+  return { r: delin(t.r), g: delin(t.g), b: delin(t.b), reduced, finalC };
+}
+
+// ── Hex Utilities ─────────────────────────────────────────────
+
+const hexToRgb = hex => {
+  hex = hex.replace(/^#/, '');
+  if (hex.length === 3) hex = hex[0]+hex[0]+hex[1]+hex[1]+hex[2]+hex[2];
+  return { r: parseInt(hex.slice(0,2),16), g: parseInt(hex.slice(2,4),16), b: parseInt(hex.slice(4,6),16) };
+};
+
+const rgbToHex = (r,g,b) => '#' + [r,g,b].map(v => v.toString(16).padStart(2,'0')).join('');
+
+function normalizeHex(s) {
+  s = s.trim().replace(/^#?/, '#');
+  if (/^#[0-9a-fA-F]{6}$/.test(s)) return s.toLowerCase();
+  if (/^#[0-9a-fA-F]{3}$/.test(s)) return ('#'+s[1]+s[1]+s[2]+s[2]+s[3]+s[3]).toLowerCase();
+  return null;
+}
+
+// ── State ─────────────────────────────────────────────────────
+
+let palette = [];   // Array of { r, g, b, hex, hue, reduced, finalC, L, C }
+let srcOklch = { L: 0, C: 0, H: 0 };
+
+// ── Toast ─────────────────────────────────────────────────────
+
+let toastTimer = null;
+function showToast(msg) {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.classList.add('visible');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => el.classList.remove('visible'), 1800);
+}
+
+// ── Generate & Render ─────────────────────────────────────────
+
+function generate(hexInput) {
+  const hex = normalizeHex(hexInput);
+  if (!hex) return;
+
+  const { r, g, b } = hexToRgb(hex);
+  srcOklch = rgbToOklch(r, g, b);
+
+  document.getElementById('valL').textContent = srcOklch.L.toFixed(4);
+  document.getElementById('valC').textContent = srcOklch.C.toFixed(4);
+  document.getElementById('valH').textContent = srcOklch.H.toFixed(1) + '°';
+  document.getElementById('previewLabel').style.background = hex;
+
+  const steps = parseInt(document.getElementById('stepsSelect').value);
+  const interval = 360 / steps;
+
+  palette = [];
+  for (let i = 0; i < steps; i++) {
+    const hue = (i * interval) % 360;
+    const c = oklchToRgb(srcOklch.L, srcOklch.C, hue);
+    palette.push({ ...c, hex: rgbToHex(c.r, c.g, c.b), hue, L: srcOklch.L, C: srcOklch.C });
+  }
+
+  renderPalette();
+  renderGray();
+}
+
+function renderPalette() {
+  const grid = document.getElementById('paletteGrid');
+  grid.innerHTML = '';
+
+  for (const c of palette) {
+    const el = document.createElement('div');
+    el.className = 'swatch';
+
+    el.innerHTML = `
+      <div class="sw-color" style="background:${c.hex}">
+        <span class="hue-badge">${c.hue.toFixed(0)}°</span>
+        ${c.reduced ? '<div class="gamut-dot"></div>' : ''}
+      </div>
+      <div class="sw-info">
+        <div class="sw-hex">${c.hex.toUpperCase()}</div>
+        <div class="sw-rgb">rgb(${c.r}, ${c.g}, ${c.b})</div>
+        <div class="sw-oklch">oklch(${c.L.toFixed(3)} ${c.finalC.toFixed(3)} ${c.hue.toFixed(1)})</div>
+      </div>`;
+
+    el.addEventListener('click', () => {
+      navigator.clipboard.writeText(c.hex.toUpperCase()).then(() => {
+        document.querySelectorAll('.swatch.copied').forEach(s => s.classList.remove('copied'));
+        el.classList.add('copied');
+        showToast(`コピー: ${c.hex.toUpperCase()}`);
+      });
+    });
+
+    el.addEventListener('contextmenu', e => {
+      e.preventDefault();
+      const rgb = `rgb(${c.r}, ${c.g}, ${c.b})`;
+      navigator.clipboard.writeText(rgb).then(() => showToast(`コピー: ${rgb}`));
+    });
+
+    grid.appendChild(el);
+  }
+}
+
+function renderGray() {
+  const grid = document.getElementById('grayGrid');
+  grid.innerHTML = '';
+
+  for (const c of palette) {
+    const el = document.createElement('div');
+    el.className = 'gray-swatch';
+    el.style.background = c.hex;
+    el.title = `${c.hex.toUpperCase()} → グレースケール（H: ${c.hue.toFixed(0)}°）`;
+    grid.appendChild(el);
+  }
+}
+
+// ── ASE Export ────────────────────────────────────────────────
+
+function exportASE() {
+  if (!palette.length) return;
+
+  const items = palette.map(c => ({ ...c, name: `H${Math.round(c.hue)}` }));
+
+  // Calculate buffer size
+  // Header: 4 (sig) + 4 (ver) + 4 (count) = 12
+  // Per block: 2 (type) + 4 (len) + [2 (namelen) + nameLen*2 (UTF16+null) + 4 (space) + 12 (floats) + 2 (type)]
+  let totalSize = 12;
+  const metas = items.map(item => {
+    const nl = item.name.length + 1; // code units incl. null
+    const dataLen = 2 + nl * 2 + 4 + 12 + 2;
+    totalSize += 2 + 4 + dataLen;
+    return { nl, dataLen };
+  });
+
+  const buf = new ArrayBuffer(totalSize);
+  const v = new DataView(buf);
+  let o = 0;
+
+  // Signature "ASEF"
+  v.setUint8(o++, 0x41); v.setUint8(o++, 0x53);
+  v.setUint8(o++, 0x45); v.setUint8(o++, 0x46);
+  v.setUint32(o, 0x00010000, false); o += 4;  // version 1.0
+  v.setUint32(o, items.length, false); o += 4; // block count
+
+  items.forEach((item, i) => {
+    const { nl, dataLen } = metas[i];
+    v.setUint16(o, 0x0001, false); o += 2;       // Color block
+    v.setUint32(o, dataLen, false); o += 4;
+    v.setUint16(o, nl, false); o += 2;             // Name length (incl. null)
+    for (const ch of item.name) { v.setUint16(o, ch.charCodeAt(0), false); o += 2; }
+    v.setUint16(o, 0, false); o += 2;              // Null terminator
+    // Color space "RGB "
+    v.setUint8(o++, 0x52); v.setUint8(o++, 0x47);
+    v.setUint8(o++, 0x42); v.setUint8(o++, 0x20);
+    // R G B as float32 0–1
+    v.setFloat32(o, item.r / 255, false); o += 4;
+    v.setFloat32(o, item.g / 255, false); o += 4;
+    v.setFloat32(o, item.b / 255, false); o += 4;
+    v.setUint16(o, 0x0002, false); o += 2;         // Color type: Normal
+  });
+
+  downloadBuffer(buf, 'hue-palette.ase');
+  showToast('ASE ファイルを書き出しました');
+}
+
+// ── ACO Export (Photoshop v1 / CLIP STUDIO) ───────────────────
+
+function exportACO() {
+  if (!palette.length) return;
+  const n = palette.length;
+  const buf = new ArrayBuffer(4 + n * 10);
+  const v = new DataView(buf);
+  let o = 0;
+
+  v.setUint16(o, 1, false); o += 2; // Version 1
+  v.setUint16(o, n, false); o += 2; // Color count
+
+  for (const c of palette) {
+    v.setUint16(o, 0, false); o += 2;                            // RGB color space
+    v.setUint16(o, Math.round(c.r / 255 * 65535), false); o += 2;
+    v.setUint16(o, Math.round(c.g / 255 * 65535), false); o += 2;
+    v.setUint16(o, Math.round(c.b / 255 * 65535), false); o += 2;
+    v.setUint16(o, 0, false); o += 2;                            // Unused
+  }
+
+  downloadBuffer(buf, 'hue-palette.aco');
+  showToast('ACO ファイルを書き出しました');
+}
+
+// ── HEX List Copy ─────────────────────────────────────────────
+
+function copyHexList() {
+  if (!palette.length) return;
+  const text = palette.map(c => c.hex.toUpperCase()).join('\n');
+  navigator.clipboard.writeText(text).then(() => showToast('HEXリストをコピーしました'));
+}
+
+// ── CSS oklch() Copy ──────────────────────────────────────────
+
+function copyCSSList() {
+  if (!palette.length) return;
+  const text = palette
+    .map(c => `oklch(${c.L.toFixed(4)} ${c.finalC.toFixed(4)} ${c.hue.toFixed(1)})`)
+    .join('\n');
+  navigator.clipboard.writeText(text).then(() => showToast('CSS oklch() リストをコピーしました'));
+}
+
+// ── File Download ─────────────────────────────────────────────
+
+function downloadBuffer(buffer, filename) {
+  const blob = new Blob([buffer]);
+  const url = URL.createObjectURL(blob);
+  const a = Object.assign(document.createElement('a'), { href: url, download: filename });
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+// ── Event Wiring ──────────────────────────────────────────────
+
+const picker = document.getElementById('colorPicker');
+const field  = document.getElementById('hexField');
+
+picker.addEventListener('input', () => {
+  field.value = picker.value;
+  generate(picker.value);
+});
+
+field.addEventListener('input', () => {
+  const norm = normalizeHex(field.value);
+  if (norm) { picker.value = norm; generate(norm); }
+});
+
+field.addEventListener('blur', () => {
+  const norm = normalizeHex(field.value);
+  if (norm) field.value = norm;
+});
+
+field.addEventListener('keydown', e => {
+  if (e.key === 'Enter') {
+    const norm = normalizeHex(field.value);
+    if (norm) { field.value = norm; picker.value = norm; generate(norm); }
+  }
+});
+
+document.getElementById('stepsSelect').addEventListener('change', () => generate(field.value));
+
+document.getElementById('btnASE').addEventListener('click', exportASE);
+document.getElementById('btnACO').addEventListener('click', exportACO);
+document.getElementById('btnHex').addEventListener('click', copyHexList);
+document.getElementById('btnCSS').addEventListener('click', copyCSSList);
+
+// ── Init ──────────────────────────────────────────────────────
+
+generate('#e05a3a');
+</script>
+</body>
+</html>
