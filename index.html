@@ -543,10 +543,10 @@ function renderPalette() {
       </div>`;
 
     el.addEventListener('click', () => {
-      navigator.clipboard.writeText(c.hex.toUpperCase()).then(() => {
+      navigator.clipboard.writeText(c.hex.slice(1).toUpperCase()).then(() => {
         document.querySelectorAll('.swatch.copied').forEach(s => s.classList.remove('copied'));
         el.classList.add('copied');
-        showToast(`コピー: ${c.hex.toUpperCase()}`);
+        showToast(`コピー: ${c.hex.slice(1).toUpperCase()}`);
       });
     });
 
@@ -650,7 +650,7 @@ function exportACO() {
 
 function copyHexList() {
   if (!palette.length) return;
-  const text = palette.map(c => c.hex.toUpperCase()).join('\n');
+  const text = palette.map(c => c.hex.slice(1).toUpperCase()).join('\n');
   navigator.clipboard.writeText(text).then(() => showToast('HEXリストをコピーしました'));
 }
 
