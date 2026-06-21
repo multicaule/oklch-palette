@@ -221,19 +221,35 @@ select {
   color: #666;
 }
 
-/* ── Grayscale Grid ── */
-.gray-grid {
+/* ── Chroma Grid ── */
+.chroma-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(112px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(80px, 1fr));
   gap: 6px;
 }
 
-.gray-swatch {
-  height: 36px;
-  border-radius: 5px;
+.chroma-swatch {
+  background: var(--surface);
   border: 1px solid var(--border);
-  filter: grayscale(100%);
+  border-radius: 6px;
+  overflow: hidden;
+  cursor: pointer;
+  transition: transform 0.1s, box-shadow 0.1s, border-color 0.1s;
+  user-select: none;
 }
+.chroma-swatch:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 18px rgba(0,0,0,0.5);
+  border-color: #555;
+}
+.chroma-swatch.copied {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 35%, transparent);
+}
+.cs-color { height: 56px; }
+.cs-info { padding: 5px 7px 6px; }
+.cs-hex { font-family: monospace; font-size: 0.75rem; font-weight: 700; margin-bottom: 1px; }
+.cs-c { font-family: monospace; font-size: 0.625rem; color: var(--muted); }
 
 /* ── Export ── */
 .export-row { display: flex; gap: 10px; flex-wrap: wrap; }
@@ -331,7 +347,8 @@ footer {
   body { padding: 12px; }
   .controls { padding: 12px; gap: 12px; }
   .oklch-vals { gap: 8px; }
-  .palette-grid, .gray-grid { grid-template-columns: repeat(auto-fill, minmax(90px, 1fr)); }
+  .palette-grid { grid-template-columns: repeat(auto-fill, minmax(90px, 1fr)); }
+  .chroma-grid { grid-template-columns: repeat(auto-fill, minmax(70px, 1fr)); }
   .sw-color { height: 58px; }
 }
 </style>
@@ -399,8 +416,8 @@ footer {
 </div>
 
 <div class="section">
-  <div class="section-head">グレースケール比較（同じL値なら同じ明るさに見える）</div>
-  <div class="gray-grid" id="grayGrid"></div>
+  <div class="section-head">彩度バリエーション — L・H固定、Cのみ変化（クリックでHEXコピー）</div>
+  <div class="chroma-grid" id="chromaGrid"></div>
 </div>
 
 <div class="section">
@@ -559,7 +576,7 @@ function generate(hexInput) {
   }
 
   renderPalette();
-  renderGray();
+  renderChroma();
 }
 
 function renderPalette() {
@@ -599,15 +616,52 @@ function renderPalette() {
   }
 }
 
-function renderGray() {
-  const grid = document.getElementById('grayGrid');
+function maxChromaForLH(L, H) {
+  let lo = 0, hi = 0.5;
+  for (let i = 0; i < 28; i++) {
+    const mid = (lo + hi) / 2;
+    const t = oklchToLinRGB(L, mid, H);
+    if (inGamut(t.r, t.g, t.b)) { lo = mid; } else { hi = mid; }
+  }
+  return lo;
+}
+
+function renderChroma() {
+  const grid = document.getElementById('chromaGrid');
   grid.innerHTML = '';
 
-  for (const c of palette) {
+  const { L, H } = srcOklch;
+  const maxC = maxChromaForLH(L, H);
+  const STEPS = 16;
+
+  for (let i = 0; i <= STEPS; i++) {
+    const c_val = (maxC / STEPS) * i;
+    const rgb = oklchToRgb(L, c_val, H);
+    const hex = rgbToHex(rgb.r, rgb.g, rgb.b);
+
     const el = document.createElement('div');
-    el.className = 'gray-swatch';
-    el.style.background = c.hex;
-    el.title = `${c.hex.toUpperCase()} → グレースケール（H: ${c.hue.toFixed(0)}°）`;
+    el.className = 'chroma-swatch';
+    el.innerHTML = `
+      <div class="cs-color" style="background:${hex}"></div>
+      <div class="cs-info">
+        <div class="cs-hex">${hex.toUpperCase()}</div>
+        <div class="cs-c">C ${c_val.toFixed(3)}</div>
+      </div>`;
+
+    el.addEventListener('click', () => {
+      navigator.clipboard.writeText(hex.slice(1).toUpperCase()).then(() => {
+        document.querySelectorAll('.chroma-swatch.copied').forEach(s => s.classList.remove('copied'));
+        el.classList.add('copied');
+        showToast(`コピー: ${hex.slice(1).toUpperCase()}`);
+      });
+    });
+
+    el.addEventListener('contextmenu', e => {
+      e.preventDefault();
+      const rgb_str = `rgb(${rgb.r}, ${rgb.g}, ${rgb.b})`;
+      navigator.clipboard.writeText(rgb_str).then(() => showToast(`コピー: ${rgb_str}`));
+    });
+
     grid.appendChild(el);
   }
 }
